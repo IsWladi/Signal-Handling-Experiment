@@ -4,6 +4,8 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+/// Execute a command in a infinite loop until SIGINT is received.
+/// The SIGINT signal have to be ignored in the child process to avoid the abrupt termination of executed command.
 fn main() -> Result<(), Error> {
     // signal handling with crate: signal-hook
     let term = Arc::new(AtomicBool::new(false));
