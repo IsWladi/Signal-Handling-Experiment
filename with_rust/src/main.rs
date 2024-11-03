@@ -21,12 +21,10 @@ fn main() -> Result<(), Error> {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .pre_exec(|| {
+                    // create new session detached from the parent process
                     if libc::setsid() == -1 {
-                        // create new session detached from the parent process
                         return Err(std::io::Error::last_os_error());
                     }
-
-                    libc::signal(libc::SIGINT, libc::SIG_IGN); // ignore SIGINT (only for the child process)
 
                     Ok(())
                 })
