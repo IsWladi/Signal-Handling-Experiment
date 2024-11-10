@@ -6,13 +6,13 @@ use windows::Win32::Foundation::BOOL;
 use windows::Win32::System::Console::{SetConsoleCtrlHandler, CTRL_CLOSE_EVENT, CTRL_C_EVENT};
 
 //
+use std::process::{Command, Stdio};
 use std::os::windows::process::CommandExt;
 //https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Foundation/struct.WIN32_ERROR.html
 use windows::Win32::Foundation::WIN32_ERROR;
-//https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Threading/constant.CREATE_NEW_CONSOLE.html
-use windows::Win32::System::Threading::CREATE_NEW_CONSOLE;
-//https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Threading/constant.DETACHED_PROCESS.html
-use windows::Win32::System::Threading::DETACHED_PROCESS;
+//https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Threading/constant.CREATE_NO_WINDOW.html
+use windows::Win32::System::Threading::CREATE_NO_WINDOW;
+
 
 static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
 
@@ -39,12 +39,15 @@ fn main() {
     // Main application code
     let mut i = 0;
     let mut handles: Vec<JoinHandle<()>> = Vec::new();
-    while !SHOULD_STOP.load(Ordering::SeqCst) && i < 10 {
-        println!("Running {}...", i + 1);
+    while !SHOULD_STOP.load(Ordering::SeqCst) {
+        if i < 10 {
+            println!("Running {}...", i + 1);
+            handles.push(thread::spawn(move || {
+            let _ = exec(&i);
+            }));
+            i += 1
+        }
 
-        handles.push(thread::spawn(|| {
-            exec(i);
-        }));
     }
 
     println!("Waiting for child processes to complete...");
@@ -54,14 +57,20 @@ fn main() {
     println!("Graceful shutdown completed.");
 }
 
-fn exec(i: i64) -> Result<(), WIN32_ERROR> {
-    let child = CommandExt::new("cmd")
+fn exec(i: &i64) -> Result<(), WIN32_ERROR> {
+    let child = Command::new("cmd")
         .arg("/C")
         .arg("timeout /t 5 && echo 'Hello from the child process!'")
-        .creation_flags(DETACHED_PROCESS | CREATE_NEW_CONSOLE)
+        .creation_flags(CREATE_NO_WINDOW.0)
+        .stdout(Stdio::piped()) 
+        .stderr(Stdio::piped())
         .spawn()
         .expect("the child process was not created");
+    let child_id = child.id();
+    let output = child.wait_with_output().expect("Failed to wait on child process");
 
-    println!("Child pid: {}, execution #{}", child.id(), i);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    println!("Child pid: {}, execution #{}, stdout: {}, stderr: {}", child_id, i, stdout, stderr);
     Ok(())
 }
